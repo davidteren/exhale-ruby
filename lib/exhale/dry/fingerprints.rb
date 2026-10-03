@@ -58,7 +58,9 @@ module Exhale
       # so it would break the on-disk cache and determinism both.
       def build(shape)
         children = shape.children.map { |child| build(child) }
-        payload = +"#{shape.kind}\u0000#{shape.label}\u0000"
+        # Bytes, not text: a Unicode label's UTF-8 next to packed digests
+        # would be two incompatible encodings. ASCII digests are unchanged.
+        payload = "#{shape.kind}\u0000#{shape.label}\u0000".b
         children.each { |child| payload << [child.digest].pack("Q>") }
         digest = Digest::SHA256.digest(payload).unpack1("Q>")
         size = 1 + children.sum(&:size)

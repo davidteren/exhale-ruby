@@ -10,7 +10,7 @@ module Exhale
       # Part of every cache key and the report header. Bump it whenever a
       # normalization rule changes, since old fingerprints stop meaning the
       # same thing.
-      VERSION = 1
+      VERSION = 2
 
       module_function
 

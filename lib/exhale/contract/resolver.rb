@@ -39,8 +39,9 @@ module Exhale
       end
 
       def primitive_for(unit)
-        best = covering(unit).max_by { |prim, ref| [ref.rank, ref.text.length, prim.name.chars.map { |c| -c.ord }] }
-        best&.first
+        pairs = covering(unit)
+        top = pairs.map { |_, ref| ref.specificity }.max
+        pairs.select { |_, ref| ref.specificity == top }.map(&:first).min_by(&:name)
       end
 
       def settings_for(unit, defaults)
@@ -111,10 +112,17 @@ module Exhale
       end
 
       def keeps?(clause, unit_a, unit_b)
-        keyed = clause.references.uniq(&:text)
-        hits_a = keyed.filter_map { |r| (k = matches(r)[unit_a]) && [r, k] }
-        hits_b = keyed.filter_map { |r| (k = matches(r)[unit_b]) && [r, k] }
-        hits_a.any? { |ra, ka| hits_b.any? { |rb, kb| ra.text != rb.text || ka != kb } }
+        a = assignment(clause, unit_a)
+        b = assignment(clause, unit_b)
+        a && b && a != b
+      end
+
+      # The one reference (and match key) a unit belongs to within a clause:
+      # the most specific of those that match it.
+      def assignment(clause, unit)
+        hits = clause.references.uniq(&:text).filter_map { |r| (k = matches(r)[unit]) && [r, k] }
+        ref, key = hits.max_by { |r, _| r.specificity }
+        ref && [ref.text, key]
       end
 
       def covering(unit)

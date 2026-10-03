@@ -29,6 +29,9 @@ module Exhale
       paths = parser.parse(@argv)
       return 2 unless valid_format?
 
+      paths = narrowing(paths)
+      return 2 unless paths
+
       result = Dry::Check.new(root: @options[:root], base: @options[:base], include_tests: @options[:include_tests],
                               contract_dir: @options[:contract_dir], overrides: @options[:overrides],
                               introduced_only: @options[:introduced_only], paths: paths,
@@ -80,6 +83,21 @@ module Exhale
       end
     end
 
+    # Every positional argument has to be a path that exists under the root.
+    # A typo like `exhale dyr` must fail loudly, never narrow the run to
+    # nothing and pass.
+    def narrowing(args)
+      root = File.expand_path(@options[:root])
+      args.map do |arg|
+        full = File.expand_path(arg, root)
+        unless File.exist?(full) && (full == root || full.start_with?("#{root}/"))
+          @err.puts "exhale: #{arg.inspect} is neither a command nor a path under #{root}"
+          return nil
+        end
+        full == root ? "." : full.delete_prefix("#{root}/")
+      end
+    end
+
     def valid_format?
       return true if Report::FORMATS.include?(@options[:format])
 
@@ -87,16 +105,22 @@ module Exhale
       false
     end
 
-    # Prints two units' normalized trees and their score, for tuning.
+    # Prints two units' normalized trees and their score, for tuning. It
+    # checks --format, --root and --base the way a run does, so a flag that
+    # would fail CI fails here too.
     def explain(args)
       args = parser.parse(args)
       unless args.size == 2
         @err.puts "usage: exhale dry explain IDENTITY IDENTITY"
         return 2
       end
+      return 2 unless valid_format?
 
-      sweep = Dry::Sweep.new(File.expand_path(@options[:root]), include_tests: @options[:include_tests],
-                                                                  contract_dir: @options[:contract_dir]).run
+      Dry::Check.new(root: @options[:root], base: @options[:base], cache_dir: @options[:cache_dir]).validate!
+      root = File.expand_path(@options[:root])
+      git = Git.new(root)
+      sweep = Dry::Sweep.new(root, files: (git.files if git.repo?), include_tests: @options[:include_tests],
+                                   contract_dir: @options[:contract_dir]).run
       a, b = args.map { |identity| sweep.index.entries.find { |e| e.unit.identity == identity } }
       missing = args.zip([a, b]).find { |_, entry| entry.nil? }
       if missing

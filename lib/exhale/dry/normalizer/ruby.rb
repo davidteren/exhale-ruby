@@ -55,58 +55,137 @@ module Exhale
         # The call stays a call; only its label becomes the marker.
         ROUTE_HELPER = /_(?:path|url)\z/
         ROUTE = ":route"
+        # Receivers that hand out route helpers: `main_app.orders_path`,
+        # `Rails.application.routes.url_helpers.order_url(o)`. On any other
+        # receiver (`request.original_url`, `blob.service_url`) the name is
+        # the receiver's own method and stays.
+        ROUTE_PROXIES = %i[url_helpers main_app helpers routes].freeze
+
+        # Stimulus names behavior in Ruby too: `data: { controller: "modal" }`
+        # and `"data-controller" => "modal"` keep their value, as the HTML
+        # attribute does.
+        STIMULUS_HASH_KEYS = %w[controller action].freeze
+        STIMULUS_KEYS = %w[data-controller data-action].freeze
+        STIMULUS = "stimulus_value"
 
         module_function
 
-        def normalize(node)
-          marker = MARKERS[node.type]
-          return leaf(marker, node) if marker
+        # template: true reads a bare identifier (`order`, no receiver, no
+        # arguments) as a local. In a partial that is what it almost always
+        # is, and Prism can't tell because the locals come from `render`.
+        def normalize(node, template: false)
+          Walker.new(template).normalize(node)
+        end
 
-          case node.type
-          when :statements_node then build(node, children: normalize_all(node.body), sequence: true)
-          when :call_node then build(node, label: call_label(node))
-          when :parentheses_node then unwrap(node)
-          else build(node, label: label_for(node))
+        class Walker
+          def initialize(template)
+            @template = template
           end
-        end
 
-        def call_label(node)
-          name = node.name.to_s
-          node.receiver.nil? && name.match?(ROUTE_HELPER) ? ROUTE : name
-        end
+          def normalize(node)
+            marker = MARKERS[node.type]
+            return leaf(marker, node) if marker
 
-        def normalize_all(nodes)
-          nodes.compact.map { |child| normalize(child) }
-        end
+            case node.type
+            when :statements_node then build(node, children: normalize_all(node.body), sequence: true)
+            when :call_node then call(node)
+            when :parentheses_node then unwrap(node)
+            when :assoc_node then assoc(node)
+            else build(node, label: label_for(node))
+            end
+          end
 
-        def build(node, label: nil, children: normalize_all(node.compact_child_nodes), sequence: false)
-          location = node.location
-          Shape.new(kind: node.type.to_s, label: label, children: children,
-                    start_line: location.start_line, end_line: location.end_line, sequence: sequence)
-        end
+          private
 
-        def leaf(kind, node)
-          location = node.location
-          Shape.new(kind: kind, label: nil, children: [],
-                    start_line: location.start_line, end_line: location.end_line, sequence: false)
-        end
+          def normalize_all(nodes)
+            nodes.compact.map { |child| normalize(child) }
+          end
 
-        # Operator writes keep their operator; every other name on a write
-        # (the variable, constant or ivar being assigned) is dropped.
-        def label_for(node)
-          operator = node.binary_operator.to_s if node.respond_to?(:binary_operator)
-          return [node.read_name.to_s, operator].compact.join(" ") if CALL_WRITES.include?(node.type)
+          def call(node)
+            return leaf(":local", node) if @template && node.variable_call?
 
-          operator
-        end
+            build(node, label: route_helper?(node) ? ROUTE : node.name.to_s)
+          end
 
-        # `(a + b)` reads the same as `a + b`.
-        def unwrap(node)
-          body = node.body
-          return normalize(body.body.first) if body.is_a?(Prism::StatementsNode) && body.body.size == 1
-          return normalize(body) if body && !body.is_a?(Prism::StatementsNode)
+          def route_helper?(node)
+            return false unless node.name.to_s.match?(ROUTE_HELPER)
 
-          build(node)
+            receiver = node.receiver
+            receiver.nil? || (receiver.is_a?(Prism::CallNode) && ROUTE_PROXIES.include?(receiver.name))
+          end
+
+          # `(a + b)` reads the same as `a + b`.
+          def unwrap(node)
+            body = node.body
+            return normalize(body.body.first) if body.is_a?(Prism::StatementsNode) && body.body.size == 1
+            return normalize(body) if body && !body.is_a?(Prism::StatementsNode)
+
+            build(node)
+          end
+
+          def assoc(node)
+            key = key_text(node.key)
+            value = node.value
+            if key == "data" && value.is_a?(Prism::HashNode)
+              build(node, children: [normalize(node.key), stimulus_hash(value)])
+            elsif STIMULUS_KEYS.include?(key) && value.is_a?(Prism::StringNode)
+              build(node, children: [normalize(node.key), stimulus(value)])
+            else
+              build(node)
+            end
+          end
+
+          def stimulus_hash(hash)
+            children = hash.elements.map do |element|
+              if element.is_a?(Prism::AssocNode) && STIMULUS_HASH_KEYS.include?(key_text(element.key)) &&
+                 element.value.is_a?(Prism::StringNode)
+                build(element, children: [normalize(element.key), stimulus(element.value)])
+              else
+                normalize(element)
+              end
+            end
+            build(hash, children: children)
+          end
+
+          def stimulus(string)
+            build(string, kind: STIMULUS, label: string.unescaped, children: [])
+          end
+
+          def key_text(key)
+            key.unescaped if key.is_a?(Prism::SymbolNode) || key.is_a?(Prism::StringNode)
+          end
+
+          # Operator writes keep their operator; every other name on a write
+          # (the variable, constant or ivar being assigned) is dropped.
+          def label_for(node)
+            operator = node.binary_operator.to_s if node.respond_to?(:binary_operator)
+            return [node.read_name.to_s, operator].compact.join(" ") if CALL_WRITES.include?(node.type)
+
+            operator
+          end
+
+          def build(node, kind: node.type.to_s, label: nil, children: normalize_all(node.compact_child_nodes),
+                    sequence: false)
+            Shape.new(kind: kind, label: label, children: children, sequence: sequence,
+                      start_line: node.location.start_line, end_line: end_line(node, children))
+          end
+
+          def leaf(kind, node)
+            Shape.new(kind: kind, label: nil, children: [], sequence: false,
+                      start_line: node.location.start_line, end_line: end_line(node, []))
+          end
+
+          # A heredoc's body and terminator sit below the line its node
+          # ends on, so a shape ends at the furthest terminator inside it.
+          def end_line(node, children)
+            last = node.location.end_line
+            last = [last, node.closing_loc.start_line].max if heredoc?(node)
+            children.empty? ? last : [last, children.map(&:end_line).max].max
+          end
+
+          def heredoc?(node)
+            node.respond_to?(:heredoc?) && node.heredoc? && node.closing_loc
+          end
         end
       end
     end

@@ -11,3 +11,5 @@ Gemfile.lock
 .rspec_status
 pkg/
 /tmp/exhale/
+/Gemfile.mutation.lock
+/.mutineer/

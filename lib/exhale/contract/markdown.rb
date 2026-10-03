@@ -19,30 +19,57 @@ module Exhale
       module_function
 
       def blocks(text)
-        state = { blocks: [], heading: nil, prose: [], fence: nil }
+        state = { blocks: [], heading: nil, prose: [], fence: nil, comment: false }
         text.each_line.with_index(1) { |raw, no| step(state, raw.chomp, no) }
         state[:blocks] << finish(state[:fence]) if state[:fence]
         state[:blocks]
       end
 
+      SETEXT = /\A {0,3}(?:=+|-+)[ \t]*\z/
+
       def step(state, line, no)
+        after_prose = state[:after_prose]
+        state[:after_prose] = false
         fence = state[:fence]
         if fence
           continue_fence(state, fence, line, no)
+        elsif (line = outside_comments(state, line)).nil?
+          nil
         elsif (fence = open_fence(line, no, state))
           state[:fence] = fence
+        elsif after_prose && SETEXT.match?(line)
+          state[:heading] = state[:prose].pop
+          state[:prose] = []
         elsif (m = HEADING.match(line))
           state[:heading] = m[1].to_s.sub(/[ \t]+#+[ \t]*\z/, "").sub(/\A#+\z/, "").strip
           state[:prose] = []
         elsif !line.strip.empty?
           state[:prose] << line.strip
+          state[:after_prose] = true
         end
+      end
+
+      # Returns the part of the line that is live Markdown, or nil when the
+      # whole line sits inside an HTML comment. Fences in comments are dead.
+      def outside_comments(state, line)
+        if state[:comment]
+          return nil unless line.include?("-->")
+
+          state[:comment] = false
+          line = line.sub(/\A.*?-->/, "")
+        end
+        line = line.gsub(/<!--.*?-->/, "")
+        return line unless line.include?("<!--")
+
+        state[:comment] = true
+        line.sub(/<!--.*\z/, "")
       end
 
       def continue_fence(state, fence, line, no)
         if closes?(line, fence)
           state[:blocks] << finish(fence)
           state[:fence] = nil
+          state[:prose] = [] if %w[parallel settings covers].include?(fence[:info])
         else
           fence[:body] << [line, no]
         end

@@ -1,5 +1,7 @@
 # exhale
 
+<p align="center"><img src="assets/huff-exhale.png" alt="Huff, the Impatient Programming imp, blowing three identical cards into one while his robot watches from the leash" width="320"></p>
+
 exhale is the contraction gate for Rails. It fails a pull request while the codebase it leaves behind holds duplicated code the Contract doesn't keep, and it tells the agent doing the cleanup which original each copy should fold into.
 
 Agents duplicate by default. They read the codebase, find a shape that works, and copy it. When pull requests merge without a person reading every diff, the copy reaches main unless a machine stops it, and every session after that copies it again. exhale is that machine for the exhale half of the breath: expand to learn, then contract what you learned into what already exists, in the same PR.
@@ -95,6 +97,8 @@ views/payments/**
 
 ```settings
 threshold: 0.75
+min-lines: 6
+min-nodes: 30
 ```
 ````
 
@@ -122,6 +126,23 @@ exhale:
 ## Determinism
 
 The same commit gets the same verdict on any machine on any day. The verdict reads the commit's tree, its Contract, and the gem versions in its `Gemfile.lock`, and nothing else. Digests are unseeded, weights are fixed-point integers computed without the platform's floating-point log, and every tie breaks on a stable key.
+
+## Narrowing a run
+
+`exhale dry PATH...` reports only the findings with a location under those paths. A narrowed run still gates, on the findings inside its paths, and every path has to exist, so a typo like `exhale dyr` exits 2 instead of passing.
+
+## How exhale holds itself to this
+
+exhale has its own Contract in `contract/`: 64 numbered obligations across 11 primitives (source, unit, shape, fingerprint, matcher, sweep, gate, clause, report, revision and cli). Every obligation has at least one test that names it with a `# Contract: <primitive>/<id>` comment, and `rake contract` publishes contract coverage and fails while any obligation lacks an executable test. CI also runs exhale on itself, reading that Contract.
+
+The mutation gate runs every mutant [Mutineer](https://github.com/davidteren/mutineer) can make of `lib/` against the whole suite. Each one is either killed by a test or listed in `.mutineer.yml` with the reason no test can catch it: an equivalent mutant, an infinite loop, or a line Ruby's coverage can't see. `bin/mutate` runs it under Ruby 3.4.
+
+## Known limits in 0.1
+
+- Duplication of intent, where the same idea is written with a different structure, is out of reach for structural matching.
+- A whole method copied into another method as a nested `def` isn't reported when its body alone is under the size floors.
+- Every run sweeps the head cold and caches only the merge base. The exact incremental sweep comes in 0.2.
+- A run of statements copied more than 50 times is connected as a star from its widest copy, which can miss a near-copy that only matches another copy.
 
 ## License
 

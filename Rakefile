@@ -9,7 +9,39 @@ Rake::TestTask.new(:test) do |t|
   t.test_files = FileList["test/**/*_test.rb"]
 end
 
-task default: :test
+# The Contract must be met, and contract coverage is published. Every
+# obligation in contract/*/README.md needs at least one test that names it
+# with a `# Contract: <primitive>/<id>` line, and a tag naming an obligation
+# that doesn't exist fails too, so the Contract and the tests can't drift.
+desc "Publish contract coverage and fail on any obligation without an executable test"
+task :contract do
+  obligations = Dir["contract/*/README.md"].sort.flat_map do |path|
+    primitive = File.basename(File.dirname(path))
+    File.read(path).scan(/^- \*\*([A-Z]+\d+)\*\*/).flatten.map { |id| "#{primitive}/#{id}" }
+  end
+  tags = {}
+  Dir["test/**/*_test.rb"].sort.each do |file|
+    File.foreach(file).with_index(1) do |line, number|
+      next unless (match = line.match(%r{#\s*Contract:\s*([a-z]+/[A-Z]+\d+)}))
+
+      (tags[match[1]] ||= []) << "#{file}:#{number}"
+    end
+  end
+
+  obligations.each do |id|
+    tests = tags.fetch(id, [])
+    puts "#{tests.empty? ? 'MISSING' : 'ok     '} #{id.ljust(16)} #{tests.size} test#{'s' unless tests.size == 1}"
+  end
+  covered = obligations.count { |id| tags.key?(id) }
+  puts "contract coverage: #{covered}/#{obligations.size} obligations (#{(100.0 * covered / obligations.size).round}%)"
+
+  unknown = tags.keys - obligations
+  abort "tests name obligations the Contract doesn't have: #{unknown.sort.join(', ')}" unless unknown.empty?
+  missing = obligations.reject { |id| tags.key?(id) }
+  abort "obligations with no executable test: #{missing.join(', ')}" unless missing.empty?
+end
+
+task default: %i[test contract]
 
 # Release tooling, the single-gem shape of the terret repo's rake release
 # tasks. The gemspec is the one source of name and version; nothing here

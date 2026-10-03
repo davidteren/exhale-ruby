@@ -10,6 +10,7 @@ class UnitsErbTest < Minitest::Test
     <% end %>
   ERB
 
+  # Contract: unit/U8
   def test_a_template_is_one_unit
     units = Exhale::Units::Erb.extract(SOURCE, "app/views/orders/_form.html.erb")
 
@@ -25,6 +26,7 @@ class UnitsErbTest < Minitest::Test
     assert_instance_of Herb::AST::DocumentNode, unit.node
   end
 
+  # Contract: unit/U8
   def test_identity_keeps_paths_outside_app
     unit = Exhale::Units::Erb.extract("<p></p>\n", "engines/shop/views/a.html.erb").first
 
@@ -35,6 +37,7 @@ class UnitsErbTest < Minitest::Test
     assert_equal 1, Exhale::Units::Erb.extract("<ul><li>a<li>b</ul>\n", "app/views/a.html.erb").size
   end
 
+  # Contract: unit/U9
   def test_unclosed_tag_raises
     error = assert_raises(Exhale::ParseError) do
       Exhale::Units::Erb.extract("<p>fine</p>\n<div>\n  <span>x</span>\n", "app/views/orders/show.html.erb")
@@ -44,12 +47,14 @@ class UnitsErbTest < Minitest::Test
     assert_equal 2, error.line
   end
 
+  # Contract: unit/U9
   def test_unclosed_erb_block_raises
     assert_raises(Exhale::ParseError) do
       Exhale::Units::Erb.extract("<% items.each do |i| %>\n  <%= i %>\n", "app/views/a.html.erb")
     end
   end
 
+  # Contract: unit/U9
   def test_broken_ruby_raises
     assert_raises(Exhale::ParseError) { Exhale::Units::Erb.extract("<%= link_to( %>\n", "app/views/a.html.erb") }
   end

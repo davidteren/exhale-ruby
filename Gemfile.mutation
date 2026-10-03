@@ -1,0 +1,7 @@
+# frozen_string_literal: true
+
+# The mutation gate. Mutineer itself needs Ruby 3.4, so it lives here and not
+# in the gem's own Gemfile, which supports Ruby 3.3.
+eval_gemfile "Gemfile"
+
+gem "mutineer", "~> 1.4", require: false

@@ -25,7 +25,7 @@ Gem::Specification.new do |spec|
   spec.files = Dir.chdir(__dir__) do
     `git ls-files -z`.split("\x0").reject do |f|
       (File.expand_path(f) == __FILE__) ||
-        f.start_with?(*%w[bin/ test/ spec/ features/ .git .github appveyor Gemfile])
+        f.start_with?(*%w[bin/ test/ spec/ features/ contract/ assets/ .git .github appveyor Gemfile])
     end
   end
   spec.bindir = "exe"
@@ -36,7 +36,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "herb", "~> 0.11"
   spec.add_dependency "prism", "~> 1.9"
 
-  spec.add_development_dependency "minitest", "~> 5.0"
+  spec.add_development_dependency "minitest", "~> 6.0"
   spec.add_development_dependency "rake", "~> 13.0"
 
   spec.metadata["rubygems_mfa_required"] = "true"

@@ -10,13 +10,21 @@ module Exhale
     Finding = Struct.new(:klass, :kind, :score, :copy, :others, :hint, :payoff, :primitive, :touched,
                          keyword_init: true)
     Kept = Struct.new(:score, :a, :b, :clause, :new_clause, keyword_init: true)
+    # a and b are the two sides' identities; a pair is contracted by its
+    # keys, but reported by the names a reader knows.
     Contracted = Struct.new(:a, :b, :score, keyword_init: true)
     Result = Struct.new(:findings, :kept, :contracted, :clause_errors, :parse_errors, :base_sha, :exit_code,
                         :notes, :introduced_only, :touched, keyword_init: true)
 
-    # What a base sweep leaves behind for labeling: which pairs matched there,
-    # by identity and by structure, and which clauses existed.
-    BaseSummary = Struct.new(:pair_keys, :structural_keys, :pairs, :clause_keys, keyword_init: true)
+    # What a base sweep leaves behind for labeling: which finding each
+    # location sat in there, found by its key or by its structure, every
+    # pair that matched, and which clauses existed.
+    #
+    # clusters    - {location key => cluster id}
+    # structures  - {structural key => [cluster id, ...]}
+    # pairs       - [[key a, key b, score, structural a, structural b, identity a, identity b], ...]
+    # clause_keys - Set of clause keys
+    BaseSummary = Struct.new(:clusters, :structures, :pairs, :clause_keys, keyword_init: true)
 
     # Turns a sweep's matches into the verdict. The verdict reads only the
     # tree being checked; the base summary only labels findings, except in
@@ -25,13 +33,59 @@ module Exhale
       ORDER = { introduced: 0, shifted: 1, already_there: 2, found: 3 }.freeze
       FAILS_ON_RAMP = %i[introduced shifted found].freeze
 
+      # Every base match, kept or not, joins its two locations into one base
+      # cluster, the same union the head's findings come from. A label then
+      # asks whether two locations sat in one cluster, so a relationship the
+      # matcher only implied (A~B and B~C, or a star around a hub) still
+      # counts.
       def self.summarize(sweep)
+        sets = UnionFind.new
+        sweep.matches.each { |m| sets.union(m.a.key, m.b.key) }
+        roots = sets.keys.group_by { |key| sets.find(key) }.values.map(&:sort).sort
+        clusters = roots.each_with_index.each_with_object({}) { |(keys, id), map| keys.each { |key| map[key] = id } }
+        structures = Hash.new { |hash, key| hash[key] = Set.new }
+        sweep.matches.each do |m|
+          [m.a, m.b].each { |l| structures[l.structural_key] << clusters.fetch(l.key) }
+        end
+
         BaseSummary.new(
-          pair_keys: Set.new(sweep.matches.map { |m| [m.a.key, m.b.key].sort }),
-          structural_keys: Set.new(sweep.matches.map { |m| [m.a.structural_key, m.b.structural_key].sort }),
-          pairs: sweep.matches.map { |m| [*[m.a.key, m.b.key].sort, m.score, *[m.a.structural_key, m.b.structural_key].sort] }.sort,
+          clusters: clusters,
+          structures: structures.transform_values { |ids| ids.to_a.sort },
+          pairs: sweep.matches.map { |m| pair_row(m) }.sort_by { |row| row.values_at(0, 1, 3, 4) },
           clause_keys: Set.new(sweep.contract.clauses.map(&:key))
         )
+      end
+
+      def self.pair_row(match)
+        a, b = [match.a, match.b].sort_by(&:key)
+        [a.key, b.key, match.score, *[a.structural_key, b.structural_key].sort, a.unit.identity, b.unit.identity]
+      end
+
+      # Disjoint sets over any hashable keys.
+      class UnionFind
+        def initialize
+          @parent = {}
+        end
+
+        def keys
+          @parent.keys
+        end
+
+        def find(key)
+          @parent[key] = key unless @parent.key?(key)
+          root = key
+          root = @parent[root] until @parent[root] == root
+          while @parent[key] != root
+            @parent[key], key = root, @parent[key]
+          end
+          root
+        end
+
+        def union(a, b)
+          root_a = find(a)
+          root_b = find(b)
+          @parent[root_b] = root_a unless root_a == root_b
+        end
       end
 
       def initialize(head:, base:, base_sha:, git:, changed_lines:, introduced_only:, paths:, overrides:)
@@ -52,7 +106,9 @@ module Exhale
         prefetch_blame(clusters)
         findings = clusters.map { |locations, matches| finding(locations, matches) }
         findings = narrow(findings) unless @paths.empty?
-        findings.sort_by! { |f| [ORDER.fetch(f.klass), -f.payoff, f.copy.path, f.copy.start_line] }
+        findings.sort_by! do |f|
+          [ORDER.fetch(f.klass), -f.payoff, f.copy.path, f.copy.start_line, f.copy.end_line, f.copy.unit.identity]
+        end
         errors = clause_errors(used)
 
         Result.new(findings: findings, kept: kept, contracted: contracted, clause_errors: errors,
@@ -77,7 +133,50 @@ module Exhale
             unkept << match
           end
         end
-        [kept, unkept, used]
+        [kept, unkept + unkept_twins(kept), used]
+      end
+
+      # The matcher joins a group of identical units as a star around one
+      # hub, so a kept edge from the hub says nothing about the members the
+      # star never paired. Each kept edge between whole units stands for
+      # every pair across the two groups it touches (or within the one group),
+      # and each of those pairs the Contract doesn't keep is unkept
+      # duplication. A group no clause touches needs no expansion: its star
+      # edges are unkept already.
+      def unkept_twins(kept)
+        groups = @head.matches.flat_map { |m| [m.a, m.b] }.select(&:whole).uniq(&:id)
+                      .group_by { |l| l.entry.tree.digest }
+        emitted = Set.new(@head.matches.map { |m| [m.a.id, m.b.id].sort })
+        expanded = Set.new
+        kept.each_with_object([]) do |k, extra|
+          next unless k.a.whole && k.b.whole
+
+          pair = [k.a.entry.tree.digest, k.b.entry.tree.digest].sort
+          next unless expanded.add?(pair)
+
+          left = groups.fetch(pair[0])
+          right = groups.fetch(pair[1])
+          next if left.size == 1 && right.size == 1
+
+          candidates = pair[0] == pair[1] ? left.combination(2) : left.product(right)
+          candidates.each do |a, b|
+            next if emitted.include?([a.id, b.id].sort)
+            next if @head.resolver.keeping_clause(a.unit, b.unit)
+
+            match = twin_match(a, b, pair[0] == pair[1] ? Rational(1) : k.score)
+            extra << match if match
+          end
+        end
+      end
+
+      # Identical units share their fingerprints, so a pair across two groups
+      # scores what their hubs scored. Each pair still meets its own settings.
+      def twin_match(a, b, score)
+        settings = @head.settings_for_pair(a.unit, b.unit)
+        return unless [a, b].all? { |l| l.lines >= settings[:min_lines] && l.size >= settings[:min_nodes] }
+        return if score < settings[:threshold]
+
+        Match.new(a: a, b: b, score: score, kind: :unit)
       end
 
       # Matches that share a location merge, so one shape copied into four
@@ -113,18 +212,19 @@ module Exhale
       end
 
       def finding(locations, matches)
-        ordered = locations.sort_by { |l| [age(l), l.path, l.start_line] }
+        @scores = matches.to_h { |m| [[location_id(m.a), location_id(m.b)].sort, m.score] }
+        ordered = locations.sort_by { |l| [age(l), l.path, l.start_line, l.end_line] }
         original = ordered.first
         copy = ordered.last
-        others = (locations - [copy]).map { |l| [l, score_between(copy, l, matches)] }
-        others.sort_by! { |l, score| [-score, l.path, l.start_line] }
+        others = (locations - [copy]).map { |l| [l, score_between(copy, l)] }
+        others.sort_by! { |l, score| [-score, l.path, l.start_line, l.end_line] }
         touched = locations.select { |l| touched?(l) }
         primitive = @head.resolver.primitive_for(original.unit)&.name
 
-        Finding.new(klass: label(copy, original, touched), kind: kind_of(locations), score: others.first[1],
-                    copy: copy, others: others, primitive: primitive, touched: touched,
+        Finding.new(klass: label(copy, original, locations, touched), kind: kind_of(locations),
+                    score: others.first[1], copy: copy, others: others, primitive: primitive, touched: touched,
                     hint: hint(copy, others, locations, touched, primitive),
-                    payoff: payoff(locations, original, copy, matches))
+                    payoff: payoff(locations, original, copy))
       end
 
       BLAME_THREADS = 8
@@ -172,30 +272,47 @@ module Exhale
         lines && (location.start_line..location.end_line).any? { |line| lines.include?(line) }
       end
 
-      def score_between(a, b, matches)
-        direct = matches.find { |m| (m.a.equal?(a) && m.b.equal?(b)) || (m.a.equal?(b) && m.b.equal?(a)) }
-        return direct.score if direct
-
-        @head.index.score(a.set, total(a), b.set, total(b))
+      # A hash lookup per pair, so a finding with hundreds of copies stays
+      # cheap; only pairs the matcher never scored directly get computed.
+      def score_between(a, b)
+        @scores.fetch([location_id(a), location_id(b)].sort) do
+          @head.index.score(a.set, total(a), b.set, total(b))
+        end
       end
 
       def total(location)
         location.whole ? location.entry.total : @head.index.weight_of(location.set)
       end
 
-      # Pure moves don't touch any lines, so a pair whose structure already
-      # matched at the base counts as already there only when the PR left
-      # both sides alone. Otherwise a new copy of an already-copied shape
-      # would hide behind the old one.
-      def label(copy, original, touched)
+      # Each touched location answers for itself: one that sat in no base
+      # finding with any other location in this finding is new, whatever
+      # else in the finding was there before. That way a PR can't hide a new
+      # copy behind an old pair by also editing an old copy.
+      #
+      # Pure moves touch no lines, so structure only vouches for a finding
+      # the PR left alone entirely: it's already there when every location
+      # sat in one base finding, each found by its key or by its structure.
+      def label(_copy, _original, locations, touched)
         return :found unless @base
 
-        return :already_there if @base.pair_keys.include?([copy.key, original.key].sort)
-        if touched.empty? && @base.structural_keys.include?([copy.structural_key, original.structural_key].sort)
-          return :already_there
+        unless touched.empty?
+          introduced = touched.any? { |l| locations.none? { |other| !other.equal?(l) && base_pair?(l, other) } }
+          return introduced ? :introduced : :already_there
         end
+        shared = locations.map { |l| base_clusters(l) }.reduce(:&)
+        shared.empty? ? :shifted : :already_there
+      end
 
-        touched.empty? ? :shifted : :introduced
+      def base_pair?(a, b)
+        cluster = @base.clusters[a.key]
+        !cluster.nil? && cluster == @base.clusters[b.key]
+      end
+
+      def base_clusters(location)
+        ids = Set.new(@base.structures.fetch(location.structural_key, []))
+        cluster = @base.clusters[location.key]
+        ids << cluster if cluster
+        ids
       end
 
       def kind_of(locations)
@@ -235,16 +352,20 @@ module Exhale
       end
 
       # The code that would disappear if the cluster folded into one copy.
-      def payoff(locations, original, copy, matches)
+      def payoff(locations, original, copy)
         (locations - [original]).sum do |l|
-          score = l.equal?(copy) ? score_between(copy, original, matches) : score_between(copy, l, matches)
+          score = l.equal?(copy) ? score_between(copy, original) : score_between(copy, l)
           l.size * score
         end.to_f.round(1)
       end
 
+      # Paths arrive relative to the root and already checked to exist; "."
+      # is the whole tree.
       def narrow(findings)
         findings.select do |f|
-          [f.copy, *f.others.map(&:first)].any? { |l| @paths.any? { |p| l.path.include?(p) } }
+          [f.copy, *f.others.map(&:first)].any? do |l|
+            @paths.any? { |p| p == "." || l.path == p || l.path.start_with?("#{p}/") }
+          end
         end
       end
 
@@ -256,19 +377,28 @@ module Exhale
         @head.contract.errors + @head.resolver.errors + stale
       end
 
+      # Counted per occurrence: each structural pair the base matched more
+      # often than the head does lost that many pairs, so deleting one of
+      # three identical copies contracts one pair even though a pair of the
+      # same shape survives. A pair still matched under its own keys never
+      # counts as lost, and a pure move keeps its structure, so it doesn't
+      # either.
       def contracted
         return [] unless @base
 
         keys = Set.new
-        structural = Set.new
+        structural = Hash.new(0)
         @head.matches.each do |m|
           keys << [m.a.key, m.b.key].sort
-          structural << [m.a.structural_key, m.b.structural_key].sort
+          structural[[m.a.structural_key, m.b.structural_key].sort] += 1
         end
-        @base.pairs.filter_map do |key_a, key_b, score, structural_a, structural_b|
-          next if keys.include?([key_a, key_b]) || structural.include?([structural_a, structural_b])
+        @base.pairs.group_by { |row| row.values_at(3, 4) }.flat_map do |shape, rows|
+          lost = rows.size - structural[shape]
+          next [] unless lost.positive?
 
-          Contracted.new(a: key_a, b: key_b, score: score)
+          rows.reject { |row| keys.include?(row.values_at(0, 1)) }.first(lost).map do |row|
+            Contracted.new(a: row[5], b: row[6], score: row[2])
+          end
         end
       end
 
@@ -276,14 +406,16 @@ module Exhale
         notes = []
         notes << "no merge base found, so findings are unlabeled" unless @base
         notes << "flags override the Contract, so this run doesn't gate" unless @overrides.empty?
-        notes << "narrowed to #{@paths.join(', ')}, so this run doesn't gate" unless @paths.empty?
+        notes << "narrowed to #{@paths.join(', ')}: only findings there are reported and gated" unless @paths.empty?
         notes << "introduced-only on-ramp: already-there findings are warnings" if @introduced_only
         notes
       end
 
+      # A narrowed run still gates, on the findings it kept, so a path given
+      # by mistake can't switch the gate off.
       def exit_code(findings, errors)
         return 2 unless @head.parse_errors.empty?
-        return 0 unless @overrides.empty? && @paths.empty?
+        return 0 unless @overrides.empty?
 
         failing = @introduced_only ? findings.select { |f| FAILS_ON_RAMP.include?(f.klass) } : findings
         failing.empty? && errors.empty? ? 0 : 1

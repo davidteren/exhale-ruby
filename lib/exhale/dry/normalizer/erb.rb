@@ -31,6 +31,8 @@ module Exhale
         # Values that name behavior, so they stay in the tree.
         KEPT_VALUES = %w[data-controller data-action].freeze
 
+        STRICT_LOCALS = /\A\s*locals:\s*(\(.*\))\s*\z/m
+
         # A head that can't parse alone, even with an `end`, gets wrapped in
         # the construct it belongs to, and the part it wrote is picked back
         # out. So the condition of `<% elsif admin? %>` or `<% when :draft %>`
@@ -64,7 +66,7 @@ module Exhale
             return if DROPPED.include?(name)
 
             case name
-            when "DocumentNode" then build(node, children: normalize_all(node.children), sequence: true)
+            when "DocumentNode" then document(node)
             when "HTMLElementNode" then element(node)
             when "HTMLAttributeNode" then attribute(node)
             when "LiteralNode" then leaf(":literal", node.location)
@@ -80,10 +82,30 @@ module Exhale
             Array(nodes).compact.filter_map { |child| normalize(child) }
           end
 
+          def document(node)
+            @scopes.first.concat(strict_locals(node.children))
+            build(node, children: normalize_all(node.children), sequence: true)
+          end
+
+          # A partial's `<%# locals: (order:, compact: false) %>` magic comment
+          # names the locals `render` passes in.
+          def strict_locals(children)
+            Array(children).each do |child|
+              next unless class_name(child) == "ERBCommentNode"
+
+              signature = child.content&.value.to_s[STRICT_LOCALS, 1]
+              next unless signature
+
+              result = Prism.parse("def _#{signature}; end")
+              return result.value.statements.body.first.locals if result.success?
+            end
+            []
+          end
+
           def element(node)
             attributes = node.open_tag ? normalize_all(node.open_tag.children) : []
             body = normalize_all(node.body)
-            children = body.empty? ? attributes : attributes + [run("html_body", node.body, body)]
+            children = body.empty? ? attributes : attributes + [run("html_body", body, node)]
             build(node, label: node.tag_name&.value&.downcase, children: children)
           end
 
@@ -115,8 +137,9 @@ module Exhale
 
             kind = opening.start_with?("<%=") ? "erb_output" : "erb_logic"
             statements, block_locals = node.content ? ruby(node.content.value, node.content.location.start.line) : nil
-            children = Array(statements).map { |statement| Ruby.normalize(statement) }
-            [Shape.new(kind: kind, label: nil, children: children, sequence: false, **tag_lines(node)), block_locals]
+            lines = tag_lines(node)
+            children = Array(statements).map { |statement| clamp(Ruby.normalize(statement, template: true), lines[:end_line]) }
+            [Shape.new(kind: kind, label: nil, children: children, sequence: false, **lines), block_locals]
           end
 
           # A tag that opens a Ruby construct over several tags: its head (the
@@ -127,7 +150,7 @@ module Exhale
             @scopes.push(block_locals) if block_locals
             children = [head].compact
             body_nodes = body_of(node)
-            children << run("erb_body", body_nodes, normalize_all(body_nodes), fallback: node) if body_nodes
+            children << run("erb_body", normalize_all(body_nodes), node) if body_nodes
             children.concat(branches(node))
             build(node, children: children)
           ensure
@@ -199,12 +222,14 @@ module Exhale
             blocks.empty? ? nil : blocks.flat_map(&:locals).uniq
           end
 
-          def run(kind, nodes, children, fallback: nil)
-            nodes = Array(nodes).compact
-            first = nodes.first || fallback
-            last = nodes.last || fallback
+          # A run spans the shapes it holds; the text and whitespace around
+          # them dropped out, so they don't stretch it. An empty run takes
+          # the lines of the node it belongs to.
+          def run(kind, children, fallback)
+            return build(fallback, kind: kind, children: children, sequence: true) if children.empty?
+
             Shape.new(kind: kind, label: nil, children: children, sequence: true,
-                      start_line: first.location.start.line, end_line: end_line(last.location))
+                      start_line: children.first.start_line, end_line: children.map(&:end_line).max)
           end
 
           def build(node, kind: snake_case(class_name(node)), label: nil,
@@ -223,6 +248,16 @@ module Exhale
             first = node.tag_opening || node
             last = node.tag_closing || node.content || node
             { start_line: first.location.start.line, end_line: end_line(last.location) }
+          end
+
+          # The `end` a head borrowed to parse sits on the line after the tag.
+          def clamp(shape, last)
+            return shape if shape.end_line <= last
+
+            shape.dup.tap do |copy|
+              copy.end_line = [last, shape.start_line].max
+              copy.children = shape.children.map { |child| clamp(child, last) }
+            end
           end
 
           # Herb ends a node that runs to a newline at column 0 of the next

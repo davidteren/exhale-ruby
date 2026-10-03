@@ -62,9 +62,15 @@ module Exhale
         parts = %i[introduced shifted already_there found kept contracted].filter_map do |key|
           "#{counts[key]} #{key.to_s.tr('_', ' ')}" if counts[key].positive?
         end
-        parts = ["clean"] if parts.empty?
+        parts << plural(@result.clause_errors.size, "contract error") unless @result.clause_errors.empty?
+        parts << plural(@result.parse_errors.size, "parse error") unless @result.parse_errors.empty?
+        parts << (@result.exit_code.zero? ? "clean" : "failing") if parts.empty?
         base = @result.base_sha ? "   base #{@result.base_sha[0, 7]}" : ""
         "exhale dry: #{parts.join(', ')}#{base}"
+      end
+
+      def plural(count, noun)
+        "#{count} #{noun}#{'s' unless count == 1}"
       end
 
       def finding(f)
@@ -103,14 +109,10 @@ module Exhale
         @out << ""
         @out << "CONTRACTED"
         @result.contracted.first(20).each do |c|
-          @out << "  #{name(c.a)} no longer matches #{name(c.b)} (#{Report.score(c.score)} at base)"
+          @out << "  #{c.a} no longer matches #{c.b} (#{Report.score(c.score)} at base)"
         end
         more = @result.contracted.size - 20
         @out << "  and #{more} more" if more.positive?
-      end
-
-      def name(key)
-        key.split("@").first
       end
 
       def errors

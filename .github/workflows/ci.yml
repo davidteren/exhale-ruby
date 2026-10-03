@@ -27,3 +27,40 @@ jobs:
 
       - name: Test suite
         run: bundle exec rake
+
+  # exhale holds itself to its own gate, reading its own Contract.
+  self:
+    name: exhale on exhale
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+
+      - name: exhale
+        shell: bash
+        run: bundle exec exe/exhale --base origin/${{ github.base_ref || 'main' }} | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # The mutation gate: every mutant is killed by a test or listed in
+  # .mutineer.yml with the reason no test can catch it. Mutineer needs
+  # Ruby 3.4, so this job runs on 3.4 with Gemfile.mutation.
+  mutation:
+    name: Mutation gate
+    runs-on: ubuntu-latest
+    env:
+      BUNDLE_GEMFILE: Gemfile.mutation
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Every mutant killed or listed
+        run: bin/mutate --threshold 100
