@@ -124,21 +124,13 @@ class GitTest < Minitest::Test
     assert_equal [".gitignore", "keep.rb", "new/untracked.rb"], @git.files
   end
 
-  def test_files_at_and_export
+  def test_files_at_lists_the_commit_not_the_work_tree
     write("a.rb", "x = 1\n")
     write("lib/b.rb", "y = 2\n")
     sha = commit("base")
-    write("a.rb", "changed\n")
+    write("c.rb", "z = 3\n")
     commit("two")
     assert_equal ["a.rb", "lib/b.rb"], @git.files_at(sha)
-    out = File.join(@dir, "..", "exhale-export-#{Process.pid}")
-    begin
-      assert_equal out, @git.export(sha, out)
-      assert_equal "x = 1\n", File.read(File.join(out, "a.rb"))
-      assert_equal "y = 2\n", File.read(File.join(out, "lib/b.rb"))
-    ensure
-      FileUtils.rm_rf(out)
-    end
   end
 
   # Value: protects=only a work tree counts as a repository; fails_when=a successful rev-parse that answers "false" (inside .git) reads as a repository; why_new=repo? was only tested inside and outside a repository; seam=none
@@ -244,12 +236,6 @@ class GitTest < Minitest::Test
     FileUtils.mv(File.join(@dir, ".git"), File.join(@dir, "moved.git"))
     error = assert_raises(Exhale::GitError) { @git.export_files(sha, ["a.rb"], File.join(@dir, "tmp-export")) }
     assert_match(/\Agit (ls-tree|cat-file) failed/, error.message)
-  end
-
-  def test_export_bad_sha_raises
-    write("a.rb", "x\n")
-    commit("base")
-    assert_raises(Exhale::GitError) { @git.export("deadbeef" * 5, File.join(@dir, "out")) }
   end
 
   # Contract: revision/V1

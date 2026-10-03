@@ -3,7 +3,6 @@
 require "fileutils"
 require "open3"
 require "set"
-require "tmpdir"
 require_relative "errors"
 
 module Exhale
@@ -108,23 +107,6 @@ module Exhale
       raise GitError, "git cat-file failed: #{utf8(err).strip}" unless status.success?
 
       write_blobs(out, paths, dir)
-      dir
-    end
-
-    def export(sha, dir)
-      FileUtils.mkdir_p(dir)
-      Dir.mktmpdir("exhale-archive") do |tmp|
-        archive = File.join(tmp, "tree.tar")
-        # From a subdirectory, git archive also narrows to that directory,
-        # which breaks the sha:prefix form. The top level sees the whole tree.
-        tree = prefix.empty? ? sha : "#{sha}:#{prefix}"
-        _out, err, status = Open3.capture3("git", *BASE_ARGS, "-C", toplevel, "archive", "--format=tar", "-o",
-                                           archive, tree)
-        raise GitError, "git archive failed: #{utf8(err).strip}" unless status.success?
-
-        _out, err, status = Open3.capture3("tar", "-x", "-f", archive, "-C", dir)
-        raise GitError, "tar failed: #{utf8(err).strip}" unless status.success?
-      end
       dir
     end
 
