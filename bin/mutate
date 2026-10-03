@@ -1,0 +1,16 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# The mutation gate: every source file in lib/ against every test, with
+# Mutineer. Mutineer needs Ruby 3.4 and lives in Gemfile.mutation, so run this
+# under Ruby 3.4 (for example RBENV_VERSION=3.4.8 bin/mutate). Extra arguments
+# go straight to `mutineer run`, e.g. `bin/mutate --format json --output m.json`.
+
+root = File.expand_path("..", __dir__)
+Dir.chdir(root)
+
+sources = Dir["lib/**/*.rb"].sort - ["lib/exhale.rb", "lib/exhale/version.rb"]
+tests = Dir["test/**/*_test.rb"].sort
+args = ["mutineer", "run", *sources, *tests.flat_map { |test| ["--test", test] }, *ARGV]
+
+exec({ "BUNDLE_GEMFILE" => File.join(root, "Gemfile.mutation") }, "bundle", "exec", *args)

@@ -1,0 +1,311 @@
+# The mutation gate (bin/mutate). Every mutant must be killed by a test or
+# listed here with the reason no test can catch it.
+
+# Raises Mutineer's hard-coded 10 second per-mutant cap to 120 seconds; the
+# file says why.
+require:
+  - test/support/mutineer_timeout.rb
+
+# Grouped by source file, one header each: append under your file's header
+# and check for an existing entry first. Each entry names its kind:
+# equivalent (no test can observe the change), a hang (detected, but
+# Mutineer scores it as no verdict), or a Mutineer blind spot (a
+# continuation line Ruby's line coverage records no event on, so Mutineer
+# never selects a test; each one was verified by hand).
+ignore:
+
+  # === lib/exhale/cli.rb ===
+  # cli.rb:22, the introduced_only default. Mutineer blind spot: Ruby line
+  # coverage records no event on this continuation line; verified by hand that
+  # CLITest#test_introduced_only_is_off_by_default_and_the_flag_turns_it_on
+  # fails when applied.
+  - "f7fa7cb78f67"
+  # cli.rb:22, the base default. Mutineer blind spot: Ruby line coverage records
+  # no event on this continuation line; verified by hand that
+  # CLIContractTest#test_explain_scores_a_pair_exactly_as_the_gate_does fails
+  # when applied.
+  - "c7643fb50e43"
+  # cli.rb:22, the cache_dir default. Mutineer blind spot: Ruby line coverage
+  # records no event on this continuation line; verified by hand that
+  # CLITest#test_the_base_sweep_is_cached_under_tmp_exhale_by_default fails when
+  # applied.
+  - "1a36301cbf54"
+
+  # === lib/exhale/contract/markdown.rb ===
+  # Equivalent. Markdown.step: the `nil` is the branch's return value, and
+  # blocks discards step's return value.
+  - "57164af371e0"
+
+  # === lib/exhale/contract/resolver.rb ===
+  # Equivalent. Resolver#const_glob_matches: `<` to `<=`. A unit's prefixes are
+  # nested (A, A::B, A::B::C), so two prefixes of one unit never have equal
+  # length.
+  - "68f881844951"
+  # Equivalent. Resolver#keeping_clause: dropping the same-unit guard. keeps?
+  # needs two different references, and one unit takes exactly one, so it
+  # answers nil.
+  - "14ce2fc5a482"
+
+  # === lib/exhale/dry/check.rb ===
+  # Equivalent. Check#find_base: dropping `return unless @git.repo?`. A --base
+  # outside a repository already raised on the line above, and without one every
+  # git lookup outside a repository answers nil, so the base is nil either way.
+  - "030cd8d6e2b4"
+  # Equivalent. Check#write_cache: the rescue's `nil` is a return value nobody
+  # reads.
+  - "61c3c7a0e600"
+
+  # === lib/exhale/dry/gate.rb ===
+  # Equivalent. Gate#verdict and Gate#prefetch_blame: prefetching only warms
+  # @blame. Gate#age blames any file the prefetch skipped, with the same rescue
+  # to no times, so skipping the prefetch, its queue or its threads changes no
+  # verdict.
+  - "401adbd4f4dd"
+  - "7743ff994e71"
+  - "484da3a6d2b6"
+  # Equivalent. Gate#cluster: dropping each group's matches only empties the
+  # score cache. score_between recomputes every pair with the scorer the matcher
+  # used, so every score comes out the same.
+  - "882f751c9d5a"
+  # Hang. Gate#cluster: `==` to `!=` in the union-find walk loops forever, so
+  # every test that builds a finding hangs. Mutineer scores a hang as a timeout,
+  # which isn't a kill, so it is listed here.
+  - "34f96862c889"
+  # gate.rb:149, `times = begin` in prefetch_blame. Mutineer blind spot: Ruby
+  # line coverage records no event on this continuation line; verified by hand
+  # that
+  # GateContractTest#test_the_copy_is_the_location_whose_own_lines_were_committed_last
+  # fails when applied.
+  - "f435a45ad4c9"
+  # Hang. UnionFind#find: the root walk and the compression loop at lines 77
+  # and 78, with their conditions flipped, loop forever. Mutineer scores a hang
+  # as a timeout, which isn't a kill.
+  - "23569a3e9bee"
+  - "f192a2f140ce"
+  # Equivalent. UnionFind#find: dropping the compression loop. It only
+  # repoints keys at their root, so every find answers the same root.
+  - "9edff91745ef"
+  # Equivalent. Gate#unkept_twins: `&&` to `||` in the whole-unit guard. Both
+  # sides of a match are whole or neither is, so the two agree.
+  - "a143f42738a3"
+  # Equivalent. Gate#unkept_twins: dropping the expanded-pair set. A repeated
+  # expansion emits the same twin matches again, and clustering merges
+  # duplicate matches into the same finding.
+  - "f2bfbbfb87a0"
+  # Equivalent. Gate#unkept_twins: dropping the two-singleton skip. A kept edge
+  # between two lone units yields only that pair, which the emitted and
+  # keeping_clause checks already drop.
+  - "a93057ab28c1"
+  # Equivalent. Gate#unkept_twins: dropping the emitted check. A twin the
+  # matcher already emitted passes the same settings and has the same score,
+  # so a duplicate match joins the same finding.
+  - "7eea9bd89379"
+  # Equivalent. Gate#base_clusters: dropping the identity route. An untouched
+  # location has the content it had at the base, so its structural key already
+  # leads to the same base cluster.
+  - "73d7427b4798"
+
+  # === lib/exhale/dry/index.rb ===
+  # Equivalent. Index#shared_weight: `<=` to `<`. With equal sizes the two sets
+  # only swap roles, and the weight of their intersection is the same either
+  # way.
+  - "40976319dcad"
+
+  # === lib/exhale/dry/matcher.rb ===
+  # Equivalent. Matcher#run_ordinal: the trailing `count + 1` is unreachable.
+  # The walk always reaches the run's own sequence and start, and returns there.
+  - "65cf080d55de"
+  # Equivalent. Matcher#prefix_matches: `<` to `<=` in pair order. The entry
+  # itself is skipped just above, so two ids in a pair are never equal.
+  - "65fd108f2a95"
+  # Equivalent. Matcher#prefix_matches and #comparable_totals?: dropping or
+  # loosening the totals bound. Jaccard can't exceed small/large, so every pair
+  # the bound skips scores under the loosest threshold and judge rejects it
+  # anyway.
+  - "a02c075fc545"
+  - "9f72286cdea7"
+  # Equivalent. Matcher#prefix: a bigger budget, `next true`, no stop, or no
+  # running total all take more digests, so the candidates are a superset and
+  # judge decides.
+  - "44d27827442b"
+  - "8b6a70daeb17"
+  - "5e23f8031e3c"
+  - "fff72589238b"
+  # Equivalent. Matcher#prefix: `>` to `>=` stops one digest early when the
+  # taken weight equals the budget exactly. That hides a pair from one entry's
+  # prefix only when the pair's sets are nested, and then the smaller entry's
+  # prefix, all shared, finds it; at threshold 1 only identical units match,
+  # through the star groups.
+  - "627608789ae1"
+  # Equivalent. Matcher#subtree_matches and #run_matches: dropping the size-two
+  # guards. A lone location or seed has no pairs to make.
+  - "b20f4787425b"
+  - "75e402d580e6"
+  # Equivalent. Matcher#run_matches and #ranges_overlap?: dropping the
+  # same-sequence overlap skip, or making ranges_overlap? never true. The
+  # `unless a.overlaps?(b)` check two lines down drops the same overlapping
+  # pairs.
+  - "8025a5877bac"
+  - "4c615238dba9"
+  - "ffd08a9d6010"
+  # Equivalent. Matcher#ranges_overlap?: `<` to `<=` in the first test. Seeds
+  # pair in order, so a run's first start is always before its second.
+  - "abb6cb4a0d30"
+  # Equivalent. Matcher#run_matches: dropping the seen-set skip. A repeated run
+  # is judged twice, and prune drops the second as lying inside the first.
+  - "886de6ee17b7"
+  # Equivalent. Matcher#run_ordinal: a range past the sequence's end. The extra
+  # windows slice short and never equal the run's digests.
+  - "15b016c8dca9"
+  # Equivalent. Matcher#prune: `&&` to `||` in the whole-match sort key. Both
+  # sides of a match are whole or neither is, so the two agree.
+  - "9f35ccf7ec41"
+  # matcher.rb:102, Matcher#whole `whole: true`. Mutineer blind spot: Ruby line
+  # coverage records no event on this continuation line; verified by hand that
+  # MatcherContractTest#test_fragments_between_identical_units_are_not_reported_separately
+  # fails when applied.
+  - "3bd2f133bdc2"
+  # matcher.rb:184, Matcher#fragment `whole: false`. Mutineer blind spot: Ruby
+  # line coverage records no event on this continuation line; verified by hand
+  # that
+  # MatcherContractTest#test_two_copies_of_a_fragment_in_one_method_have_different_keys
+  # fails when applied.
+  - "2a69136f959b"
+  # matcher.rb:283, Matcher#run_location `whole: false`. Mutineer blind spot:
+  # Ruby line coverage records no event on this continuation line; verified by
+  # hand that
+  # MatcherTest#test_a_run_lifted_out_of_the_middle_of_a_method_is_found fails
+  # when applied.
+  - "40df183f743b"
+  # matcher.rb:253, the forward skip comparison in extend_run. Mutineer blind
+  # spot: Ruby line coverage records no event on this continuation line;
+  # verified by hand that
+  # MatcherTest#test_a_run_spends_one_mismatch_going_forward fails when applied.
+  - "cfc9bc3af38d"
+  - "62884c6431f0"
+  - "29250cb8d4ec"
+  - "82c763ede5f3"
+  - "bb55d9cc00fd"
+  # matcher.rb:266, the backward skip comparison in extend_run. Mutineer blind
+  # spot: Ruby line coverage records no event on this continuation line;
+  # verified by hand that
+  # MatcherTest#test_a_run_spends_one_mismatch_going_backward fails when
+  # applied.
+  - "83743223da04"
+  - "e83f10b1f864"
+  - "7b23220d61a8"
+  # matcher.rb:266, the same comparison with a `+ back` index. Mutineer blind
+  # spot: Ruby line coverage records no event on this continuation line;
+  # verified by hand that
+  # MatcherTest#test_a_run_never_spans_two_adjacent_mismatches fails when
+  # applied.
+  - "f4ee23617674"
+  - "e7e515e1c90d"
+  # Equivalent. Matcher#matches: dropping the `@twins = {}` reset. #initialize
+  # sets the same empty hash, and a second call over the same index refills it
+  # with the same twins.
+  - "c4a518d4dcaf"
+  # Equivalent. Matcher#prefix_matches: dropping the `other.equal?(entry)` skip.
+  # A pair of an entry with itself has equal tree digests, so the digest check
+  # below it drops it; and a repeated pair that check lets through is dropped by
+  # prune, which discards any match inside an earlier one.
+  - "ae28219a7c33"
+  # Equivalent. Matcher#prefix_matches: dropping the equal-digest skip. Two
+  # representatives with one tree (different line counts or settings) are
+  # already joined by the identical-unit star, so the pair comes out a second
+  # time and prune drops it as lying inside the first.
+  - "d695b3b92fde"
+  # Equivalent. Matcher#judge_core: the `core == run` and overlap guards. When
+  # the core is the run, judge_run just rejected it and its key is already in
+  # seen; a core lies inside its run, and a run that overlapped itself was
+  # skipped before judge_core was called.
+  - "482e1fdbdc1f"
+  - "be93d99c229c"
+  # Equivalent. Matcher#judge_core: dropping the seen check. One core reached
+  # through two different runs is judged twice and comes out twice; prune drops
+  # the second as lying inside the first.
+  - "283b5821a846"
+  # matcher.rb:342, the forward growth comparison in exact_core. Mutineer blind
+  # spot: Ruby line coverage records no event on this continuation line;
+  # verified by hand that
+  # MatcherTest#test_the_exact_core_is_the_longest_identical_run_through_the_seed
+  # fails when applied.
+  - "36fb2c53d2de"
+  - "058f2d391f64"
+  - "3880fefdfff1"
+
+  # === lib/exhale/dry/normalizer/erb.rb ===
+  # Equivalent. Normalizer::Erb::Walker#tag: the nil when a tag has no content.
+  # Herb gives every ERB tag a content node, an empty string when the tag holds
+  # nothing.
+  - "5bd8764e3bbf"
+  # Equivalent. Normalizer::Erb::Walker#ruby: block locals for code that parses
+  # on its own. Only control reads a tag's block locals, and a control head
+  # opens a construct, so it never parses without the end it borrows.
+  - "319864080d3a"
+  # Equivalent. Normalizer::Erb::Walker#parse: `-` to `+` repeats locals already
+  # in scope. Prism reads the scope as a set of names.
+  - "feb4a0aa5860"
+  # Equivalent. Normalizer::Erb::Walker#run: an empty run's sequence flag. The
+  # flag isn't part of the digest, and an empty run has no statements to seed a
+  # run.
+  - "fcb521b8a793"
+  # Equivalent. Normalizer::Erb::Walker#tag_lines: a tag node starts at its
+  # opening, and an unclosed tag ends where its content does, so both mutants
+  # give the same lines.
+  - "c3201c17f7c7"
+  - "a38b3a7dd4fe"
+  # Equivalent. Normalizer::Erb::Walker#clamp: `<=` to `<`. At equality the copy
+  # keeps the same end line, and every child already ends within it.
+  - "d8423aca2658"
+
+  # === lib/exhale/dry/normalizer/ruby.rb ===
+  # Equivalent. Normalizer::Ruby::Walker#unwrap: removing the non-statements
+  # return. Prism (~> 1.9) only builds a ParenthesesNode body as a
+  # StatementsNode or nil, so the guarded return never fires.
+  - "4d22786dfb0c"
+
+  # === lib/exhale/git.rb ===
+  # Equivalent. Git#merge_base: `&&` to `||`. git merge-base prints a commit
+  # exactly when it succeeds, so the two conditions never disagree.
+  - "e398f5ae8377"
+  # Equivalent. Git#export_files: the early return for no paths. cat-file with
+  # empty input succeeds with empty output, and write_blobs then writes nothing.
+  - "4c1598dce596"
+  # Equivalent. Git#parse_diff: the initial `current` and `in_header`, and
+  # `current` reset at each file. git diff output starts with a "diff --git"
+  # line, and a file's hunks always follow its "+++" line, so these values are
+  # never read.
+  - "4ae5f561bdee"
+  - "0da67675f4a3"
+  - "4a49a9b5e557"
+  # Equivalent. Git#new_path: the /dev/null return, removed or turned to true. A
+  # deleted file's hunks are "+0,0" and add no lines, and changed_lines drops
+  # paths with no lines.
+  - "f460734e92f7"
+  - "513aab7a4d1e"
+  # Equivalent. Git#line_times: the initial `sha` and `final` are overwritten by
+  # the first porcelain line, always a header, and keeping the newline changes
+  # nothing, since every match is anchored at the start and to_i ignores it.
+  - "0e6fd0d54024"
+  - "97222e61980f"
+  - "6417d4c7ff91"
+  # Equivalent. Git#export_files: the second early return for no paths, and the
+  # select that drops paths the commit lacks. A path with no blob asks cat-file
+  # for an empty line, which answers " missing", and write_blobs skips that
+  # header; with every path gone, cat-file with empty input succeeds with empty
+  # output and write_blobs writes nothing.
+  - "aefec7e0bad1"
+  - "49d033b332b0"
+  # git.rb:95, `binmode: true` in export_files. Mutineer blind spot: Ruby line
+  # coverage records no event on this continuation line; verified by hand that
+  # GitTest#test_export_files_writes_blobs_after_multibyte_ones_byte_for_byte
+  # fails when applied.
+  - "e3869f0c08d8"
+
+  # === lib/exhale/units/ruby.rb ===
+  # Equivalent. Units::Ruby::Walker#constant_name: anchor nil to true, twice.
+  # Callers only compare the anchor with :root and :self, so nil and true read
+  # the same.
+  - "715a673d73d7"
+  - "cda7dce78796"
