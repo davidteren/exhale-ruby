@@ -8,10 +8,10 @@ Gem::Specification.new do |spec|
   spec.authors = ["Obie Fernandez"]
   spec.email = ["obiefernandez@gmail.com"]
 
-  spec.summary = "The contraction gate for Rails: no PR merges while the codebase holds duplication the Contract doesn't keep"
+  spec.summary = "The contraction toolkit for Rails. Its first check, exhale dry, fails a PR while the codebase holds duplication the Contract doesn't keep"
   spec.description = <<~DESC.strip.gsub(/\n/, " ")
-    exhale gates the exhale of every pull request in a Rails app. Its first check, exhale dry,
-    sweeps the whole codebase for duplicated Ruby and ERB, scores near-copies by rarity-weighted
+    exhale is the contraction toolkit for the exhale of every pull request in a Rails app. Its
+    first check, exhale dry, sweeps the whole codebase for duplicated Ruby and ERB, scores near-copies by rarity-weighted
     structural similarity, and fails the build while any copy is undeclared. Deliberate
     duplication is declared in the Contract, next to the reason for it. Built on Prism and Herb.
   DESC

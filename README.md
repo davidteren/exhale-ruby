@@ -1,12 +1,12 @@
 # exhale
 
-<p align="center"><img src="assets/huff-exhale.png" alt="Huff, the Impatient Programming imp, blowing three identical cards into one while his robot watches from the leash" width="320"></p>
+<p align="center"><img src="assets/huff-exhale.svg" alt="Huff, the Impatient Programming imp, lips pursed, blowing two duplicate cards away while he keeps one in his hand and his robot sits at his feet" width="320"></p>
 
-exhale is the contraction gate for Rails. It fails a pull request while the codebase it leaves behind holds duplicated code the Contract doesn't keep, and it tells the agent doing the cleanup which original each copy should fold into.
+exhale is the contraction toolkit for Rails, the checks for the breathe-out phase of Impatient Programming. Its first check is `exhale dry`. It fails a pull request while the codebase it leaves behind holds duplicated code the Contract doesn't keep, and it tells the agent doing the cleanup which original each copy should fold into.
 
 Agents duplicate by default. They read the codebase, find a shape that works, and copy it. When pull requests merge without a person reading every diff, the copy reaches main unless a machine stops it, and every session after that copies it again. exhale is that machine for the exhale half of the breath: expand to learn, then contract what you learned into what already exists, in the same PR.
 
-The first check is `exhale dry`. It combines Uncle Bob's [dryer](https://github.com/unclebob/dryer) and Ryan Davis's [flay](https://github.com/seattlerb/flay), rebuilt on [Prism](https://github.com/ruby/prism) and [Herb](https://herb-tools.dev) so it reads modern Ruby and ERB the way Rails writes them.
+`exhale dry` combines Uncle Bob's [dryer](https://github.com/unclebob/dryer) and Ryan Davis's [flay](https://github.com/seattlerb/flay), rebuilt on [Prism](https://github.com/ruby/prism) and [Herb](https://herb-tools.dev) so it reads modern Ruby and ERB the way Rails writes them. It is the only check in 0.1. A CRAP score check and a leaked-guards check are planned.
 
 ## Install
 
@@ -20,10 +20,10 @@ end
 ```bash
 bundle install
 bundle binstubs exhale
-bin/exhale
+bin/exhale dry
 ```
 
-Exit code 0 means the codebase is clean. 1 means the gate failed: there's unkept duplication, or a Contract clause is stale or names code that doesn't exist. 2 means exhale couldn't run, usually because a file doesn't parse.
+`exhale dry` exits 0 when the codebase is clean. It exits 1 when the gate fails: there's unkept duplication, or a Contract clause is stale or names code that doesn't exist. It exits 2 when it couldn't run, usually because a file doesn't parse.
 
 ## What it compares
 
@@ -51,7 +51,7 @@ Every subtree of a normalized unit is a fingerprint. Each fingerprint is weighte
 
 ## The gate
 
-Every run sweeps the whole codebase. Main passes the same gate, so anything a pull request trips over is its own doing. exhale compares against the merge base only to label findings:
+Every run sweeps the whole codebase. Main passes the same gate, so anything a pull request trips over is its own doing. `exhale dry` compares against the merge base only to label findings:
 
 | Label | Meaning |
 | --- | --- |
@@ -61,7 +61,7 @@ Every run sweeps the whole codebase. Main passes the same gate, so anything a pu
 
 The report also lists what the PR contracted: pairs that matched at the base and don't anymore.
 
-An existing app won't sweep clean on its first run. `--introduced-only` gates on introduced and shifted findings and lists the rest as warnings. Once main is clean, drop the flag.
+An existing app won't sweep clean on its first run. `exhale dry --introduced-only` gates on introduced and shifted findings and lists the rest as warnings. Once main is clean, drop the flag.
 
 ## The Contract
 
@@ -118,10 +118,10 @@ exhale:
         bundler-cache: true
     - name: exhale
       shell: bash
-      run: bin/exhale --base origin/${{ github.base_ref || 'main' }} | tee -a "$GITHUB_STEP_SUMMARY"
+      run: bin/exhale dry --base origin/${{ github.base_ref || 'main' }} | tee -a "$GITHUB_STEP_SUMMARY"
 ```
 
-`fetch-depth: 0` gives exhale the history it needs to find the merge base and run `git blame`. `--format json` prints the same findings as data, and `--format edn` prints them in the shape dryer writes to `.metrics/dry.edn`.
+`fetch-depth: 0` gives `exhale dry` the history it needs to find the merge base and run `git blame`. `exhale dry --format json` prints the same findings as data, and `--format edn` prints them in the shape dryer writes to `.metrics/dry.edn`.
 
 ## Determinism
 
@@ -133,7 +133,7 @@ The same commit gets the same verdict on any machine on any day. The verdict rea
 
 ## How exhale holds itself to this
 
-exhale has its own Contract in `contract/`: 64 numbered obligations across 11 primitives (source, unit, shape, fingerprint, matcher, sweep, gate, clause, report, revision and cli). Every obligation has at least one test that names it with a `# Contract: <primitive>/<id>` comment, and `rake contract` publishes contract coverage and fails while any obligation lacks an executable test. CI also runs exhale on itself, reading that Contract.
+exhale has its own Contract in `contract/`: 64 numbered obligations across 11 primitives (source, unit, shape, fingerprint, matcher, sweep, gate, clause, report, revision and cli). Every obligation has at least one test that names it with a `# Contract: <primitive>/<id>` comment, and `rake contract` publishes contract coverage and fails while any obligation lacks an executable test. CI also runs `exhale dry` on itself, reading that Contract.
 
 The mutation gate runs every mutant [Mutineer](https://github.com/davidteren/mutineer) can make of `lib/` against the whole suite. Each one is either killed by a test or listed in `.mutineer.yml` with the reason no test can catch it: an equivalent mutant, an infinite loop, or a line Ruby's coverage can't see. `bin/mutate` runs it under Ruby 3.4.
 
