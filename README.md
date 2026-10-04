@@ -2,11 +2,11 @@
 
 <p align="center"><img src="assets/huff-exhale.svg" alt="Huff, the Impatient Programming imp, lips pursed, blowing two duplicate cards away while he keeps one in his hand and his robot sits at his feet" width="320"></p>
 
-exhale is the contraction toolkit for Rails, the checks for the breathe-out phase of Impatient Programming. Its first check is `exhale dry`. It fails a pull request while the codebase it leaves behind holds duplicated code the Contract doesn't keep, and it tells the agent doing the cleanup which original each copy should fold into.
+Exhale aims to be the premier contraction toolkit for Ruby, the checks for the breathe-out phase of Impatient Programming. Its first check is `exhale dry`. It fails a pull request while the codebase it leaves behind holds duplicated code the Contract doesn't keep, and it tells the agent doing the cleanup which original each copy should fold into.
 
 Agents duplicate by default. They read the codebase, find a shape that works, and copy it. When pull requests merge without a person reading every diff, the copy reaches main unless a machine stops it, and every session after that copies it again. exhale is that machine for the exhale half of the breath: expand to learn, then contract what you learned into what already exists, in the same PR.
 
-`exhale dry` combines Uncle Bob's [dryer](https://github.com/unclebob/dryer) and Ryan Davis's [flay](https://github.com/seattlerb/flay), rebuilt on [Prism](https://github.com/ruby/prism) and [Herb](https://herb-tools.dev) so it reads modern Ruby and ERB the way Rails writes them. It is the only check in 0.1. A CRAP score check and a leaked-guards check are planned.
+`exhale dry` combines Robert Martin's [dryer](https://github.com/unclebob/dryer) and Ryan Davis's [flay](https://github.com/seattlerb/flay), rebuilt on [Prism](https://github.com/ruby/prism) and [Herb](https://herb-tools.dev) so it reads modern Ruby and ERB the way Rails writes them. It is the only check in 0.1. A CRAP score check and a leaked-guards check are planned.
 
 ## Install
 
