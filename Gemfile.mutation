@@ -4,4 +4,4 @@
 # in the gem's own Gemfile, which supports Ruby 3.3.
 eval_gemfile "Gemfile"
 
-gem "mutineer", "~> 1.4", require: false
+gem "mutineer", "~> 1.5", require: false

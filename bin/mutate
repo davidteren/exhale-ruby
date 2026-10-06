@@ -5,6 +5,11 @@
 # Mutineer. Mutineer needs Ruby 3.4 and lives in Gemfile.mutation, so run this
 # under Ruby 3.4 (for example RBENV_VERSION=3.4.8 bin/mutate). Extra arguments
 # go straight to `mutineer run`, e.g. `bin/mutate --format json --output m.json`.
+#
+# `bin/mutate --matrix` runs every test in each mutant's covering files instead
+# of stopping at the first failure, and reports blind tests (they kill no
+# mutant) and redundant tests (another test makes each of their kills). It is
+# much slower and never changes a verdict, so it is a separate run, not the gate.
 
 root = File.expand_path("..", __dir__)
 Dir.chdir(root)

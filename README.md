@@ -135,7 +135,7 @@ The same commit gets the same verdict on any machine on any day. The verdict rea
 
 exhale has its own Contract in `contract/`: 64 numbered obligations across 11 primitives (source, unit, shape, fingerprint, matcher, sweep, gate, clause, report, revision and cli). Every obligation has at least one test that names it with a `# Contract: <primitive>/<id>` comment, and `rake contract` publishes contract coverage and fails while any obligation lacks an executable test. CI also runs `exhale dry` on itself, reading that Contract.
 
-The mutation gate runs every mutant [Mutineer](https://github.com/davidteren/mutineer) can make of `lib/` against the whole suite. Each one is either killed by a test or listed in `.mutineer.yml` with the reason no test can catch it: an equivalent mutant, an infinite loop, or a line Ruby's coverage can't see. `bin/mutate` runs it under Ruby 3.4.
+The mutation gate runs every mutant [Mutineer](https://github.com/davidteren/mutineer) can make of `lib/` against the whole suite. Each one is either killed by a test or listed in `.mutineer.yml` with the reason no test can catch it: an equivalent mutant, an infinite loop, or a line Ruby's coverage can't see. `bin/mutate` runs it under Ruby 3.4. `bin/mutate --matrix` also names the tests that kill no mutant and the tests whose every kill another test also makes; it runs every covering test per mutant, so it is a separate, slower run and not part of the gate.
 
 ## Known limits in 0.1
 
