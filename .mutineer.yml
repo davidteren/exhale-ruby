@@ -140,7 +140,7 @@ ignore:
   # Equivalent. Matcher#prune: `&&` to `||` in the whole-match sort key. Both
   # sides of a match are whole or neither is, so the two agree.
   - "9f35ccf7ec41"
-  # matcher.rb:253, the forward skip comparison in extend_run. Mutineer blind
+  # matcher.rb:361, the forward skip comparison in extend_run. Mutineer blind
   # spot: the right side of a multi-line `&&`; verified by hand that
   # MatcherTest#test_a_run_spends_one_mismatch_going_forward fails when applied.
   - "cfc9bc3af38d"
@@ -148,14 +148,14 @@ ignore:
   - "29250cb8d4ec"
   - "82c763ede5f3"
   - "bb55d9cc00fd"
-  # matcher.rb:266, the backward skip comparison in extend_run. Mutineer blind
+  # matcher.rb:374, the backward skip comparison in extend_run. Mutineer blind
   # spot: the right side of a multi-line `&&`; verified by hand that
   # MatcherTest#test_a_run_spends_one_mismatch_going_backward fails when
   # applied.
   - "83743223da04"
   - "e83f10b1f864"
   - "7b23220d61a8"
-  # matcher.rb:266, the same comparison with a `+ back` index. Mutineer blind
+  # matcher.rb:374, the same comparison with a `+ back` index. Mutineer blind
   # spot: the right side of a multi-line `&&`; verified by hand that
   # MatcherTest#test_a_run_never_spans_two_adjacent_mismatches fails when
   # applied.
