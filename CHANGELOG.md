@@ -3,6 +3,7 @@
 ## Unreleased
 
 - The mutation gate moves to Mutineer 1.5. `timeout: 120` in `.mutineer.yml` replaces the `test/support/mutineer_timeout.rb` patch, and 8 ignore entries for continuation lines are gone, because Mutineer now selects tests for the later lines of a multi-line call or hash. The 13 on the right side of a multi-line `&&` stay, because Mutineer still selects no tests for an operand that may never run.
+- `bin/mutate --matrix` reports blind and redundant tests with Mutineer 1.5's kill matrix. It is a separate run, not part of the gate.
 
 ## 0.1.0
 
