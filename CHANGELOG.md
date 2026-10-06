@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The mutation gate moves to Mutineer 1.5. `timeout: 120` in `.mutineer.yml` replaces the `test/support/mutineer_timeout.rb` patch, and 8 ignore entries for continuation lines are gone, because Mutineer now selects tests for the later lines of a multi-line call or hash. The 13 on the right side of a multi-line `&&` stay, because Mutineer still selects no tests for an operand that may never run.
+
 ## 0.1.0
 
 First release. `exhale dry` sweeps the whole codebase for duplicated Ruby and HTML ERB and fails while any copy isn't kept by the Contract.

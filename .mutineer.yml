@@ -1,35 +1,21 @@
 # The mutation gate (bin/mutate). Every mutant must be killed by a test or
 # listed here with the reason no test can catch it.
 
-# Raises Mutineer's hard-coded 10 second per-mutant cap to 120 seconds; the
-# file says why.
-require:
-  - test/support/mutineer_timeout.rb
+# Each mutant gets 120 seconds. A surviving mutant runs its whole covering
+# set, and for the gate code that set (gate, sweep, revision, check and report
+# tests, each building git repositories) takes longer than the 10 second
+# default under parallel load. At 10 seconds those survivors would score as
+# timeouts, which count as no verdict and hide them.
+timeout: 120
 
 # Grouped by source file, one header each: append under your file's header
 # and check for an existing entry first. Each entry names its kind:
 # equivalent (no test can observe the change), a hang (detected, but
-# Mutineer scores it as no verdict), or a Mutineer blind spot (a
-# continuation line Ruby's line coverage records no event on, so Mutineer
-# never selects a test; each one was verified by hand).
+# Mutineer scores it as no verdict), or a Mutineer blind spot (the right
+# side of a multi-line `&&` or `||`: Ruby's line coverage records no event on
+# a continuation line, and Mutineer selects no tests for an operand that may
+# never run; each one was verified by hand).
 ignore:
-
-  # === lib/exhale/cli.rb ===
-  # cli.rb:22, the introduced_only default. Mutineer blind spot: Ruby line
-  # coverage records no event on this continuation line; verified by hand that
-  # CLITest#test_introduced_only_is_off_by_default_and_the_flag_turns_it_on
-  # fails when applied.
-  - "f7fa7cb78f67"
-  # cli.rb:22, the base default. Mutineer blind spot: Ruby line coverage records
-  # no event on this continuation line; verified by hand that
-  # CLIContractTest#test_explain_scores_a_pair_exactly_as_the_gate_does fails
-  # when applied.
-  - "c7643fb50e43"
-  # cli.rb:22, the cache_dir default. Mutineer blind spot: Ruby line coverage
-  # records no event on this continuation line; verified by hand that
-  # CLITest#test_the_base_sweep_is_cached_under_tmp_exhale_by_default fails when
-  # applied.
-  - "1a36301cbf54"
 
   # === lib/exhale/contract/markdown.rb ===
   # Equivalent. Markdown.step: the `nil` is the branch's return value, and
@@ -71,12 +57,6 @@ ignore:
   # every test that builds a finding hangs. Mutineer scores a hang as a timeout,
   # which isn't a kill, so it is listed here.
   - "34f96862c889"
-  # gate.rb:149, `times = begin` in prefetch_blame. Mutineer blind spot: Ruby
-  # line coverage records no event on this continuation line; verified by hand
-  # that
-  # GateContractTest#test_the_copy_is_the_location_whose_own_lines_were_committed_last
-  # fails when applied.
-  - "f435a45ad4c9"
   # Hang. UnionFind#find: the root walk and the compression loop at lines 77
   # and 78, with their conditions flipped, loop forever. Mutineer scores a hang
   # as a timeout, which isn't a kill.
@@ -160,26 +140,8 @@ ignore:
   # Equivalent. Matcher#prune: `&&` to `||` in the whole-match sort key. Both
   # sides of a match are whole or neither is, so the two agree.
   - "9f35ccf7ec41"
-  # matcher.rb:102, Matcher#whole `whole: true`. Mutineer blind spot: Ruby line
-  # coverage records no event on this continuation line; verified by hand that
-  # MatcherContractTest#test_fragments_between_identical_units_are_not_reported_separately
-  # fails when applied.
-  - "3bd2f133bdc2"
-  # matcher.rb:184, Matcher#fragment `whole: false`. Mutineer blind spot: Ruby
-  # line coverage records no event on this continuation line; verified by hand
-  # that
-  # MatcherContractTest#test_two_copies_of_a_fragment_in_one_method_have_different_keys
-  # fails when applied.
-  - "2a69136f959b"
-  # matcher.rb:283, Matcher#run_location `whole: false`. Mutineer blind spot:
-  # Ruby line coverage records no event on this continuation line; verified by
-  # hand that
-  # MatcherTest#test_a_run_lifted_out_of_the_middle_of_a_method_is_found fails
-  # when applied.
-  - "40df183f743b"
   # matcher.rb:253, the forward skip comparison in extend_run. Mutineer blind
-  # spot: Ruby line coverage records no event on this continuation line;
-  # verified by hand that
+  # spot: the right side of a multi-line `&&`; verified by hand that
   # MatcherTest#test_a_run_spends_one_mismatch_going_forward fails when applied.
   - "cfc9bc3af38d"
   - "62884c6431f0"
@@ -187,16 +149,14 @@ ignore:
   - "82c763ede5f3"
   - "bb55d9cc00fd"
   # matcher.rb:266, the backward skip comparison in extend_run. Mutineer blind
-  # spot: Ruby line coverage records no event on this continuation line;
-  # verified by hand that
+  # spot: the right side of a multi-line `&&`; verified by hand that
   # MatcherTest#test_a_run_spends_one_mismatch_going_backward fails when
   # applied.
   - "83743223da04"
   - "e83f10b1f864"
   - "7b23220d61a8"
   # matcher.rb:266, the same comparison with a `+ back` index. Mutineer blind
-  # spot: Ruby line coverage records no event on this continuation line;
-  # verified by hand that
+  # spot: the right side of a multi-line `&&`; verified by hand that
   # MatcherTest#test_a_run_never_spans_two_adjacent_mismatches fails when
   # applied.
   - "f4ee23617674"
@@ -226,8 +186,7 @@ ignore:
   # the second as lying inside the first.
   - "283b5821a846"
   # matcher.rb:342, the forward growth comparison in exact_core. Mutineer blind
-  # spot: Ruby line coverage records no event on this continuation line;
-  # verified by hand that
+  # spot: the right side of a multi-line `&&`; verified by hand that
   # MatcherTest#test_the_exact_core_is_the_longest_identical_run_through_the_seed
   # fails when applied.
   - "36fb2c53d2de"
@@ -297,11 +256,6 @@ ignore:
   # output and write_blobs writes nothing.
   - "aefec7e0bad1"
   - "49d033b332b0"
-  # git.rb:95, `binmode: true` in export_files. Mutineer blind spot: Ruby line
-  # coverage records no event on this continuation line; verified by hand that
-  # GitTest#test_export_files_writes_blobs_after_multibyte_ones_byte_for_byte
-  # fails when applied.
-  - "e3869f0c08d8"
 
   # === lib/exhale/units/ruby.rb ===
   # Equivalent. Units::Ruby::Walker#constant_name: anchor nil to true, twice.
